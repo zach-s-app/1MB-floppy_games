@@ -1,0 +1,1016 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>SHADOW SEED 3D</title>
+    <style>
+        :root { --neon: #9f9; --dark: #000; }
+        body { margin:0; background:var(--dark); color:var(--neon); font-family:monospace; overflow:hidden; }
+        canvas { display:block; image-rendering:pixelated; }
+        #crt { position:absolute; inset:0; pointer-events:none;
+            background:linear-gradient(rgba(18,16,16,0) 50%,rgba(0,0,0,0.1) 50%),
+                       linear-gradient(90deg,rgba(255,0,0,0.03),rgba(0,255,0,0.01),rgba(0,0,255,0.03));
+            z-index:50; background-size:100% 2px,3px 100%; }
+        #ui { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+              text-align:center; background:rgba(0,0,0,0.95); z-index:100; }
+        .menu-container { width:430px; display:flex; flex-direction:column; }
+        .btn { padding:12px; margin:8px; border:1px solid var(--neon); cursor:pointer;
+               font-family:monospace; background:transparent; color:var(--neon);
+               font-size:14px; font-weight:bold; text-transform:uppercase; }
+        .btn:hover { background:var(--neon); color:var(--dark); box-shadow:0 0 20px var(--neon); }
+        .btn.chaos { border-color:#f0f; color:#f0f; }
+        .btn.chaos:hover { background:#f0f; color:#000; box-shadow:0 0 20px #f0f; }
+        #hud { position:absolute; top:15px; left:15px; font-size:13px; z-index:10;
+               background:rgba(0,0,0,0.6); padding:10px; border-left:3px solid var(--neon); line-height:1.6; }
+        #hud.backrooms-hud { border-left-color:#c8a96e; background:rgba(20,18,10,0.8); color:#c8a96e; }
+        #weapon { position:fixed; bottom:0; left:50%; transform:translateX(-50%);
+                  width:160px; height:100px; background:#333; border:4px solid #555; transition:0.05s; z-index:60; }
+        #weapon.firing { background:#fff; border-color:#9f9; }
+        #msg { position:absolute; top:45%; left:50%; transform:translate(-50%,-50%);
+               font-size:16px; color:#fa4; pointer-events:none; z-index:20;
+               text-align:center; text-shadow:0 0 8px #fa4; }
+        #msg.backrooms-msg { color:#c8a96e; text-shadow:0 0 8px #c8a96e; }
+        #tip { position:absolute; bottom:110px; left:50%; transform:translateX(-50%);
+               font-size:11px; color:#444; pointer-events:none; z-index:10; }
+        #dead { position:absolute; inset:0; display:flex; flex-direction:column;
+                align-items:center; justify-content:center; background:rgba(0,0,0,0.92); z-index:200; }
+        #dead h2 { color:#f33; letter-spacing:8px; font-size:32px; }
+        #bloodtint { position:absolute; inset:0; pointer-events:none;
+                     background:rgba(180,0,0,0.07); z-index:45; }
+        /* Backrooms overlay — warm yellow-beige tint over everything */
+        #backroomstint { position:absolute; inset:0; pointer-events:none;
+                         background:rgba(180,160,80,0.04); z-index:44; }
+        #seedinput { background:#000; border:1px solid #9f9; color:#9f9;
+                     font-family:monospace; font-size:14px; padding:8px;
+                     margin:4px 8px; text-align:center; width:calc(100% - 32px); }
+        #rps { position:absolute; inset:0; display:flex; flex-direction:column;
+               align-items:center; justify-content:center; background:rgba(0,0,0,0.97); z-index:150; }
+        #rps h2 { color:#f0f; letter-spacing:6px; }
+        #rps p  { color:#666; font-size:12px; }
+        .rps-btn { padding:16px 28px; margin:8px; border:2px solid #f0f; cursor:pointer;
+                   font-family:monospace; background:transparent; color:#f0f;
+                   font-size:20px; font-weight:bold; }
+        .rps-btn:hover { background:#f0f; color:#000; }
+        #chaosflash { position:absolute; inset:0; pointer-events:none; z-index:46;
+                      background:rgba(255,0,255,0); transition:background 0.1s; }
+        /* Fluorescent flicker for backrooms */
+        #flickerflash { position:absolute; inset:0; pointer-events:none; z-index:47;
+                        background:rgba(255,250,200,0); transition:background 0.05s; }
+        .hidden { display:none !important; }
+    </style>
+</head>
+<body>
+    <div id="crt"></div>
+    <div id="bloodtint" class="hidden"></div>
+    <div id="backroomstint" class="hidden"></div>
+    <div id="chaosflash"></div>
+    <div id="flickerflash"></div>
+    <div id="hud" class="hidden"></div>
+    <div id="msg" class="hidden"></div>
+    <div id="tip" class="hidden">WASD move · SHIFT sprint · CLICK shoot · R convert scrap · Q chaos seed</div>
+
+    <div id="ui">
+        <div id="menu" class="menu-container">
+            <h1 style="letter-spacing:8px;color:#9f9;margin-bottom:4px;">SHADOW SEED</h1>
+            <p style="color:#666;font-size:11px;margin:0 0 12px;">3D INFINITE EDITION</p>
+            <p>VAULT: <span id="m-coins">0</span>c</p>
+            <input id="seedinput" placeholder="WORLD SEED (blank = random)" maxlength="20"/>
+            <div class="btn" onclick="game.start(false)">NEW RUN</div>
+            <div class="btn" onclick="game.start(true)">CONTINUE</div>
+            <div class="btn" onclick="view('shop')">MARKET</div>
+            <div class="btn" onclick="view('set')">SYSTEM</div>
+            <div class="btn chaos" onclick="showRpsPicker('menu')">RNG SEED PICKER</div>
+        </div>
+        <div id="shop" class="menu-container hidden">
+            <h2>MARKET</h2>
+            <p>FUNDS: <span id="s-coins">0</span>c</p>
+            <div class="btn" onclick="game.buy(0)">VITALITY CORE (10c) — +20 MAX HP</div>
+            <div class="btn" onclick="game.buy(1)">REFLEX SYNAPSE (15c) — STAMINA REGEN+</div>
+            <div class="btn" onclick="view('menu')">← BACK</div>
+        </div>
+        <div id="set" class="menu-container hidden">
+            <h2>SYSTEM</h2>
+            <div class="btn" onclick="game.toggle('sk')">STALKER AI: <span id="o-sk">ON</span></div>
+            <div class="btn" onclick="game.toggle('fl')">FLASHLIGHT: <span id="o-fl">ON</span></div>
+            <div class="btn chaos" onclick="game.toggle('chaos')">CHAOS MODE: <span id="o-chaos">OFF</span></div>
+            <div class="btn" onclick="view('menu')">← BACK</div>
+        </div>
+    </div>
+
+    <div id="rps" class="hidden">
+        <h2>RNG SEED PICKER</h2>
+        <p>Your choice determines the world seed</p>
+        <div style="display:flex;">
+            <button class="rps-btn" onclick="rpsChoose(0)">🗡 sword</button>
+            <button class="rps-btn" onclick="rpsChoose(1)">𐂫 assassin</button>
+            <button class="rps-btn" onclick="rpsChoose(2)">👾 demon</button>
+        </div>
+        <p id="rps-result" style="color:#f0f;font-size:14px;min-height:20px;"></p>
+        <button class="rps-btn" onclick="rpsAccept()">ACCEPT SEED</button>
+        <button class="rps-btn" style="border-color:#666;color:#666;" onclick="rpsCancel()">CANCEL</button>
+    </div>
+
+    <div id="dead" class="hidden">
+        <h2>TERMINATED</h2>
+        <p id="dead-stats" style="color:#9f9;line-height:1.8;"></p>
+        <div class="btn" onclick="location.reload()">RESTART</div>
+    </div>
+    <canvas id="c"></canvas>
+    <div id="weapon" class="hidden"></div>
+
+<script>
+const ctx = document.getElementById('c').getContext('2d');
+let wasm = null;
+
+let px = 1.5, py = 1.5, pa = 0;
+let state = 'MENU', coins = 0, stUpgrade = 0;
+let bloodMoon = false, msgTimer = 0;
+let hitFlash = 0;
+let playerMaxHP = 100;
+let globalSeed = 1, savedSeed = 1;
+let rpsReturnView = 'menu', rpsPendingSeed = 0;
+
+// Backrooms state (JS-side)
+let inBackrooms = false;
+let flickerTimer = 0;
+
+const cfg = { sk:true, fl:true, chaos:false };
+let chaosTimer = 0;
+const CHAOS_INTERVAL = 4000;
+const keys = {};
+
+let lootItems = [];
+const lootSpawned = new Set();
+
+// ================================================================
+// INDEXEDDB
+// ================================================================
+let db;
+const dbReq = indexedDB.open("VaultDB3D", 3);
+dbReq.onupgradeneeded = e => {
+    const d = e.target.result;
+    if (!d.objectStoreNames.contains("data")) d.createObjectStore("data");
+};
+dbReq.onsuccess = e => {
+    db = e.target.result;
+    const os = db.transaction("data").objectStore("data");
+    os.get("coins").onsuccess      = r => { coins      = r.target.result || 0;   updateCoinDisplay(); };
+    os.get("seed").onsuccess       = r => { savedSeed  = r.target.result || 1;   };
+    os.get("stUpgrade").onsuccess  = r => { stUpgrade  = r.target.result || 0;   };
+    os.get("playerMaxHP").onsuccess= r => { playerMaxHP= r.target.result || 100; };
+};
+const dbPut = (k,v) => { if(db) db.transaction("data","readwrite").objectStore("data").put(v,k); };
+const save  = () => {
+    dbPut("coins",coins); dbPut("seed",globalSeed);
+    dbPut("stUpgrade",stUpgrade); dbPut("playerMaxHP",playerMaxHP);
+    updateCoinDisplay();
+};
+const updateCoinDisplay = () => {
+    document.getElementById('m-coins').innerText = coins;
+    document.getElementById('s-coins').innerText = coins;
+};
+
+// ================================================================
+// UI HELPERS
+// ================================================================
+const showMsg = (s, t=2000) => {
+    msgTimer = t;
+    const el = document.getElementById('msg');
+    el.classList.remove('hidden');
+    el.innerText = s;
+    // Backrooms messages get a different color
+    el.classList.toggle('backrooms-msg', inBackrooms);
+};
+const view = id => {
+    ['menu','shop','set'].forEach(v => document.getElementById(v).classList.add('hidden'));
+    document.getElementById(id).classList.remove('hidden');
+    updateCoinDisplay();
+};
+
+// ================================================================
+// BACKROOMS HELPERS
+// ================================================================
+function enterBackrooms() {
+    if (inBackrooms) return;
+    inBackrooms = true;
+    wasm.enter_backrooms();
+    lootItems = []; // no loot in the backrooms
+    lootSpawned.clear();
+
+    // Visual switch
+    document.getElementById('backroomstint').classList.remove('hidden');
+    document.getElementById('bloodtint').classList.add('hidden');
+    document.getElementById('hud').classList.add('backrooms-hud');
+
+    // Spawn near current pos
+    wasm.find_safe_spawn(px, py);
+    px = wasm.get_spawn_x(); py = wasm.get_spawn_y();
+
+    flickerTimer = FLICKER_MIN_CFG + Math.random() * FLICKER_MAX_CFG;
+    showMsg(CONFIG.enter_msg || 'YOU HAVE CLIPPED OUT OF REALITY', 3000);
+    setTimeout(() => showMsg(CONFIG.find_msg || 'FIND THE BROWN DOOR', 2500), 3500);
+}
+
+function exitBackrooms() {
+    const targetDepth = wasm.exit_backrooms_depth();
+    wasm.exit_backrooms(targetDepth);
+    inBackrooms = false;
+
+    lootItems = []; lootSpawned.clear();
+    spawnLootForGrid();
+
+    document.getElementById('backroomstint').classList.add('hidden');
+    document.getElementById('hud').classList.remove('backrooms-hud');
+
+    wasm.find_safe_spawn(px, py);
+    px = wasm.get_spawn_x(); py = wasm.get_spawn_y();
+
+    bloodMoon = Math.random() < (0.12 + wasm.get_current_depth() * 0.02);
+    document.getElementById('bloodtint').classList.toggle('hidden', !bloodMoon);
+
+    const depth = wasm.get_current_depth();
+    showMsg(`${CONFIG.escaped_msg || 'ESCAPED THE BACKROOMS'} → DEPTH ${depth}`, 2500);
+    if (bloodMoon) setTimeout(() => showMsg('⚠ BLOOD MOON', 2000), 2600);
+}
+
+function updateFlicker(dt) {
+    if (!inBackrooms) return;
+    flickerTimer -= dt;
+    if (flickerTimer <= 0) {
+        flickerTimer = FLICKER_MIN_CFG + Math.random() * FLICKER_MAX_CFG;
+        // Random fluorescent flicker
+        const ff = document.getElementById('flickerflash');
+        const flickers = Math.floor(Math.random() * 4) + 1;
+        let delay = 0;
+        for (let i = 0; i < flickers; i++) {
+            const dur = 30 + Math.random() * 80;
+            const gap = 40 + Math.random() * 100;
+            setTimeout(() => {
+                ff.style.background = `rgba(255,250,180,${0.05 + Math.random()*0.12})`;
+                setTimeout(() => { ff.style.background = 'rgba(255,250,200,0)'; }, dur);
+            }, delay);
+            delay += dur + gap;
+        }
+    }
+}
+
+// ================================================================
+// RPS SEED PICKER
+// ================================================================
+function showRpsPicker(returnView) {
+    rpsReturnView = returnView;
+    document.getElementById('rps-result').innerText = '';
+    rpsPendingSeed = 0;
+    document.getElementById('rps').classList.remove('hidden');
+}
+function rpsChoose(playerPick) {
+    const cpuPick = Math.floor(Math.random() * 3);
+    const names = ['you hit them','you hit them','you hit them'];
+    const outcomes = [[0,2,1],[1,0,2],[2,1,0]];
+    const outcome = outcomes[playerPick][cpuPick];
+    const outcomeText = ['TIE','YOU WIN','YOU LOSE'][outcome];
+    const salt = (Date.now() & 0x7FFF);
+    if (wasm && wasm.mix_seed_rps) {
+        rpsPendingSeed = Math.abs(wasm.mix_seed_rps(playerPick, cpuPick, salt)) || 1;
+    } else {
+        rpsPendingSeed = Math.abs(((playerPick*3+cpuPick) ^ salt) * 2246822519) || 1;
+    }
+    document.getElementById('rps-result').innerText =
+        `CPU: ${names[cpuPick]} — ${outcomeText} — SEED: ${rpsPendingSeed}`;
+}
+function rpsAccept() {
+    if (rpsPendingSeed) {
+        globalSeed = rpsPendingSeed;
+        document.getElementById('seedinput').value = String(rpsPendingSeed);
+    }
+    document.getElementById('rps').classList.add('hidden');
+    view(rpsReturnView);
+}
+function rpsCancel() {
+    document.getElementById('rps').classList.add('hidden');
+    view(rpsReturnView);
+}
+
+// ================================================================
+// LOOT (normal world only)
+// ================================================================
+function makeRng(seed) {
+    let h = (seed | 1) >>> 0;
+    return () => { h^=h<<13; h^=h>>17; h^=h<<5; return (h>>>0)/0x100000000; };
+}
+function spawnLootForChunk(cx, cy) {
+    if (!wasm || inBackrooms) return;
+    const key = `${cx},${cy}`;
+    if (lootSpawned.has(key)) return;
+    lootSpawned.add(key);
+    const depth = wasm.get_current_depth();
+    const count = wasm.calculate_loot_chance
+        ? wasm.calculate_loot_chance(globalSeed, cx, cy, depth) : 2;
+    const rng = makeRng((cx*73856093 ^ cy*19349663 ^ depth*83492791 ^ globalSeed)>>>0);
+    for (let i=0; i<count; i++) {
+        const lx=Math.floor(rng()*8)+1, ly=Math.floor(rng()*8)+1;
+        const t=rng();
+        lootItems.push({
+            wx:cx*10+lx+0.5, wy:cy*10+ly+0.5,
+            type:t<0.45?'hp':t<0.75?'scrap':'ammo',
+            chunkX:cx, chunkY:cy
+        });
+    }
+}
+function spawnLootForGrid() {
+    if (!wasm || inBackrooms) return;
+    const half=4, pcx=wasm.get_player_chunk_x(), pcy=wasm.get_player_chunk_y();
+    for(let dy=-half;dy<=half;dy++)
+        for(let dx=-half;dx<=half;dx++)
+            spawnLootForChunk(pcx+dx, pcy+dy);
+}
+function cullLoot() {
+    if (!wasm) return;
+    const pcx=wasm.get_player_chunk_x(), pcy=wasm.get_player_chunk_y();
+    lootItems=lootItems.filter(l=>Math.abs(l.chunkX-pcx)<=5&&Math.abs(l.chunkY-pcy)<=5);
+}
+function checkLoot() {
+    if (inBackrooms) return; // no loot in backrooms
+    for(let i=lootItems.length-1;i>=0;i--) {
+        const l=lootItems[i];
+        if(Math.hypot(px-l.wx, py-l.wy)<0.5) {
+            if(l.type==='hp')         { wasm.heal_player(15); showMsg('MEDPACK +HP',700); }
+            else if(l.type==='scrap') { wasm.add_scrap(3);    showMsg('SCRAP +3',600); }
+            else                      { showMsg('AMMO CACHE',600); }
+            lootItems.splice(i,1);
+        }
+    }
+}
+
+// ================================================================
+// CHAOS MODE (disabled in backrooms — the backrooms has its own rules)
+// ================================================================
+function updateChaos(dt) {
+    if (!cfg.chaos || state !== 'GAME' || inBackrooms) return;
+    chaosTimer -= dt;
+    if (chaosTimer <= 0) {
+        chaosTimer = CHAOS_INTERVAL + Math.random()*2000;
+        const a=Math.floor(Math.random()*3), b=Math.floor(Math.random()*3);
+        const salt=(Date.now()&0xFFFF);
+        let mixedVal = wasm && wasm.mix_seed_rps
+            ? wasm.mix_seed_rps(a,b,salt) : ((a*3+b)^salt);
+        const roll=Math.abs(mixedVal)%4;
+        let flipped='';
+        if(roll===0){cfg.sk=!cfg.sk; flipped=`STALKER AI ${cfg.sk?'ON':'OFF'}`;}
+        if(roll===1){cfg.fl=!cfg.fl; flipped=`FLASHLIGHT ${cfg.fl?'ON':'OFF'}`;}
+        if(roll===2){
+            bloodMoon=!bloodMoon;
+            document.getElementById('bloodtint').classList.toggle('hidden',!bloodMoon);
+            flipped=bloodMoon?'🌑 BLOOD MOON':'BLOOD MOON ENDED';
+        }
+        if(roll===3){
+            if(wasm) globalSeed=Math.abs(wasm.mix_seed_rps(
+                Math.floor(Math.random()*3),Math.floor(Math.random()*3),(Date.now()&0x7FFF)
+            ))||1;
+            flipped='⚄ CHAOS RESEED!';
+        }
+        if(flipped) showMsg(`[CHAOS] ${flipped}`,1800);
+        const cf=document.getElementById('chaosflash');
+        cf.style.background='rgba(255,0,255,0.15)';
+        setTimeout(()=>{cf.style.background='rgba(255,0,255,0)';},120);
+    }
+}
+
+// ================================================================
+// GAME OBJECT
+// ================================================================
+const game = {
+    prevChunkX:0, prevChunkY:0, lastTime:0,
+
+    toggle(o) {
+        cfg[o]=!cfg[o];
+        document.getElementById(`o-${o}`).innerText=cfg[o]?'ON':'OFF';
+        if(o==='chaos'&&cfg.chaos){chaosTimer=CHAOS_INTERVAL; showMsg('CHAOS MODE ENGAGED',1500);}
+    },
+
+    start(useSaved) {
+        if(!wasm){showMsg('LOADING SYSTEMS...'); setTimeout(()=>this.start(useSaved),200); return;}
+        const inp=document.getElementById('seedinput').value.trim();
+        let rawSeed = 0; // 0 = let WASM pick, negative/zero triggers wallhack easter egg
+        if(inp){
+            const parsed = parseInt(inp);
+            if(!isNaN(parsed) && parsed <= 0) {
+                // User typed 0 or negative — pass raw to WASM, triggers wallhack
+                rawSeed = parsed;
+                globalSeed = 1; // JS uses 1 internally
+            } else {
+                let h=0; for(let i=0;i<inp.length;i++) h=(Math.imul(31,h)+inp.charCodeAt(i))|0;
+                globalSeed=Math.abs(h)||1;
+                rawSeed = globalSeed;
+            }
+        } else if(useSaved&&savedSeed){
+            globalSeed=savedSeed; rawSeed=globalSeed;
+        } else {
+            globalSeed=((Math.random()*0x7FFFFFFF)|0)||1;
+            rawSeed=globalSeed;
+        }
+
+        state='GAME'; lootItems=[]; lootSpawned.clear(); inBackrooms=false;
+        this.diedOnLevel=false;
+        ['ui','dead'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+        ['hud','weapon','tip'].forEach(id=>document.getElementById(id).classList.remove('hidden'));
+        document.getElementById('backroomstint').classList.add('hidden');
+        document.getElementById('hud').classList.remove('backrooms-hud');
+
+        wasm.init_world(rawSeed,0); // WASM checks if rawSeed <= 0 for wallhack
+        wasm.set_st_upgrade(stUpgrade);
+        const hpUps=Math.floor((playerMaxHP-100)/20);
+        for(let i=0;i<hpUps;i++) wasm.buy_upgrade(0);
+
+        wasm.find_safe_spawn(1.5,1.5);
+        px=wasm.get_spawn_x(); py=wasm.get_spawn_y(); pa=0;
+
+        // Spawn wallhack roll — only if player died on a level previously
+        // WASM checks if player is near spawn point and rolls 1/1000
+        if(game.diedOnLevel && !wasm.get_wallhack()) {
+            if(wasm.roll_spawn_wallhack(px, py)) {
+                setTimeout(()=>showMsg('something feels... off',2000), 1500);
+                setTimeout(()=>showMsg('walls.dll not found',1500), 4000);
+            }
+        }
+        game.diedOnLevel = false;
+
+        // Check if wallhack was triggered by bad seed (0 or negative)
+        if(wasm.get_wallhack() && rawSeed <= 0) {
+            showMsg('REALITY.EXE HAS STOPPED WORKING',3000);
+            setTimeout(()=>showMsg('walls.dll not found',2000),3200);
+        }
+
+        this.prevChunkX=wasm.get_player_chunk_x();
+        this.prevChunkY=wasm.get_player_chunk_y();
+
+        bloodMoon=Math.random()<0.12;
+        document.getElementById('bloodtint').classList.toggle('hidden',!bloodMoon);
+        if(bloodMoon) showMsg('⚠ BLOOD MOON',2500);
+
+        spawnLootForGrid(); save();
+        this.lastTime=performance.now();
+        loop();
+    },
+
+    buy(t) {
+        if(!wasm) return;
+        const cost=t===0?10:15;
+        if(coins>=cost){
+            coins-=cost; wasm.buy_upgrade(t);
+            if(t===0) playerMaxHP+=20;
+            if(t===1) stUpgrade++;
+            save(); showMsg('UPGRADE INSTALLED');
+        } else showMsg('INSUFFICIENT FUNDS');
+    },
+
+    checkChunkShift() {
+        const curCX=Math.floor(px/10), curCY=Math.floor(py/10);
+        if(curCX!==this.prevChunkX||curCY!==this.prevChunkY){
+            const dx=curCX-this.prevChunkX, dy=curCY-this.prevChunkY;
+            if(dy>0) wasm.shift_grid(1); else if(dy<0) wasm.shift_grid(0);
+            if(dx>0) wasm.shift_grid(3); else if(dx<0) wasm.shift_grid(2);
+            this.prevChunkX=wasm.get_player_chunk_x();
+            this.prevChunkY=wasm.get_player_chunk_y();
+            if(!inBackrooms){ spawnLootForGrid(); cullLoot(); }
+        }
+    },
+
+    checkBlueDoor() {
+        if(inBackrooms) return; // no blue doors in backrooms
+        const ec=wasm.get_ent_count();
+        for(let i=0;i<ec;i++){
+            if(Math.floor(wasm.get_ent_f(i,2))!==4||!wasm.get_ent_f(i,3)) continue;
+            const ex=wasm.get_ent_f(i,0), ey=wasm.get_ent_f(i,1);
+            if(Math.hypot(px-ex,py-ey)<0.7){
+                const sc=Math.floor(wasm.get_p_stat(5));
+                if(sc>=5){const e=Math.floor(sc/5);coins+=e;wasm.add_scrap(-(e*5));showMsg(`DESCENDING +${e}c`,2000);}
+                else showMsg('DESCENDING...',1500);
+                wasm.go_deeper();
+                lootSpawned.clear(); lootItems=[];
+                wasm.find_safe_spawn(px,py);
+                px=wasm.get_spawn_x(); py=wasm.get_spawn_y();
+                this.prevChunkX=wasm.get_player_chunk_x();
+                this.prevChunkY=wasm.get_player_chunk_y();
+                spawnLootForGrid(); save();
+                const nd=wasm.get_current_depth();
+                bloodMoon=Math.random()<(0.12+nd*0.02);
+                document.getElementById('bloodtint').classList.toggle('hidden',!bloodMoon);
+                if(bloodMoon) showMsg('⚠ BLOOD MOON — DEPTH '+nd,2500);
+                break;
+            }
+        }
+    },
+
+    checkBrownDoor() {
+        if(!inBackrooms) return; // brown doors only exist in backrooms
+        const ec=wasm.get_ent_count();
+        for(let i=0;i<ec;i++){
+            if(Math.floor(wasm.get_ent_f(i,2))!==5||!wasm.get_ent_f(i,3)) continue;
+            const ex=wasm.get_ent_f(i,0), ey=wasm.get_ent_f(i,1);
+            if(Math.hypot(px-ex,py-ey)<0.7){
+                exitBackrooms();
+                this.prevChunkX=wasm.get_player_chunk_x();
+                this.prevChunkY=wasm.get_player_chunk_y();
+                save();
+                break;
+            }
+        }
+    },
+
+    // Noclip detection — only in normal world
+    // In backrooms, walls are solid and this is disabled
+    checkNoclip() {
+        if(inBackrooms) return; // you broke rule 1, now deal with it
+        const tileUnderPlayer = wasm.get_tile_world(Math.floor(px), Math.floor(py));
+        if(tileUnderPlayer === 1) {
+            // Player is inside a wall — enter the backrooms
+            enterBackrooms();
+            this.prevChunkX=wasm.get_player_chunk_x();
+            this.prevChunkY=wasm.get_player_chunk_y();
+        }
+    }
+};
+
+// ================================================================
+// INPUT
+// ================================================================
+window.onkeydown = e => {
+    keys[e.key.toLowerCase()]=true;
+    if(e.key===' ') e.preventDefault();
+    if(e.key.toLowerCase()==='r'&&state==='GAME'&&wasm&&!inBackrooms){
+        const sc=Math.floor(wasm.get_p_stat(5));
+        if(sc>=5){const earned=Math.floor(sc/5);coins+=earned;wasm.add_scrap(-(earned*5));save();showMsg(`SCRAP → +${earned}c`);}
+    }
+    if(e.key.toLowerCase()==='q'&&state==='GAME'&&!inBackrooms) showRpsPicker('menu');
+};
+window.onkeyup = e => keys[e.key.toLowerCase()]=false;
+
+window.onclick = () => {
+    if(state!=='GAME'||!wasm) return;
+    const w=document.getElementById('weapon');
+    w.classList.add('firing'); setTimeout(()=>w.classList.remove('firing'),50);
+    if(wasm.fire_weapon(px,py,pa)){
+        const reward=inBackrooms?20:bloodMoon?10:5;
+        coins+=reward; save(); hitFlash=10;
+        showMsg(inBackrooms?`+${reward}c THE THING HIT!`:bloodMoon?`+${reward}c BLOOD MOON KILL!`:`+${reward}c`,700);
+    }
+};
+
+// ================================================================
+// CONFIG — JS-side values parsed from shadow_seed.xml
+// These mirror what gets sent to WASM via set_config_*
+// ================================================================
+const CONFIG = {
+    // Defaults — overwritten by XML parse
+    move_speed: 0.065,
+    sprint_speed: 0.10,
+    flicker_min: 800,
+    flicker_max: 4000,
+    hp_heal: 15.0,
+    scrap_pickup: 3,
+    scrap_to_coins: 5,
+    blood_moon_kill_coins: 10,
+    normal_kill_coins: 5,
+    chaos_interval: 4000,
+    chaos_variance: 2000,
+    // Backrooms messages (from obfuscated section)
+    enter_msg: 'YOU HAVE CLIPPED OUT OF REALITY',
+    find_msg:  'FIND THE BROWN DOOR',
+    escaped_msg: 'ESCAPED THE BACKROOMS',
+};
+
+// ================================================================
+// XML + INI + BASE64 PARSER
+// Reads shadow_seed.xml, handles plain ini and base64 encoded lines
+// ================================================================
+function b64decode(str) {
+    try { return atob(str); } catch(e) { return null; }
+}
+
+function isBase64Line(line) {
+    // Base64 lines: only valid base64 chars, ends with = or ==, no spaces, no key= pattern before it
+    return /^[A-Za-z0-9+/]+=*$/.test(line.trim()) && !line.includes(' ');
+}
+
+function inferType(val) {
+    if (val === 'true')  return true;
+    if (val === 'false') return false;
+    if (/^-?\d+\.\d+$/.test(val)) return parseFloat(val);
+    if (/^-?\d+$/.test(val))      return parseInt(val);
+    return val; // string
+}
+
+function parseIniBlock(text) {
+    const result = {};
+    for (const raw of text.split('\n')) {
+        let line = raw.trim();
+        if (!line || line.startsWith('<!--') || line.startsWith('<')) continue;
+        // Try base64 decode first
+        if (isBase64Line(line)) {
+            const decoded = b64decode(line);
+            if (decoded) line = decoded.trim();
+            else continue;
+        }
+        const eq = line.indexOf('=');
+        if (eq === -1) continue;
+        const key = line.slice(0, eq).trim();
+        const val = line.slice(eq+1).trim();
+        result[key] = inferType(val);
+    }
+    return result;
+}
+
+function parseShadowSeedXml(xmlText) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xmlText, 'text/xml');
+    const sections = {};
+    for (const node of doc.documentElement.children) {
+        sections[node.tagName] = parseIniBlock(node.textContent);
+    }
+    return sections;
+}
+
+function applyConfig(sections, wasmExports) {
+    // Merge all sections into CONFIG for JS use
+    for (const [sec, kvs] of Object.entries(sections)) {
+        for (const [k, v] of Object.entries(kvs)) {
+            CONFIG[k] = v;
+        }
+    }
+
+    // Send typed values to WASM via set_config_* exports
+    // We use a JS-side djb2 hash to match what C++ uses
+    function djb2(s) {
+        let h = 5381;
+        for (let i=0; i<s.length; i++) h = ((h<<5)+h) ^ s.charCodeAt(i);
+        return h >>> 0;
+    }
+
+    for (const [sec, kvs] of Object.entries(sections)) {
+        if (sec === 'build') continue; // build-only, not runtime
+        for (const [k, v] of Object.entries(kvs)) {
+            const hash = djb2(k);
+            if (typeof v === 'boolean') {
+                wasmExports.set_config_bool(hash, v ? 1 : 0);
+            } else if (typeof v === 'number' && !Number.isInteger(v)) {
+                wasmExports.set_config_float(hash, v);
+            } else if (typeof v === 'number') {
+                wasmExports.set_config_int(hash, v);
+            }
+            // strings stay JS-side only (messages etc)
+        }
+    }
+
+    // Apply JS-side config values that came from XML
+    if (CONFIG.flicker_min) FLICKER_MIN_CFG = CONFIG.flicker_min;
+    if (CONFIG.flicker_max) FLICKER_MAX_CFG = CONFIG.flicker_max;
+}
+
+// Make flicker timing configurable
+let FLICKER_MIN_CFG = 800;
+let FLICKER_MAX_CFG = 4000;
+
+// ================================================================
+// WASM + XML LOAD — both must complete before game is ready
+// ================================================================
+let xmlSections = null;
+
+const wasmPromise = fetch('ray.wasm')
+    .then(r=>r.arrayBuffer())
+    .then(b=>WebAssembly.instantiate(b,{env:{
+        cosf:Math.cos, sinf:Math.sin, sqrtf:Math.sqrt,
+        atan2f:Math.atan2, fabsf:Math.abs,
+        memory:new WebAssembly.Memory({initial:6})
+    }}));
+
+const xmlPromise = fetch('shadow_seed.xml')
+    .then(r=>r.text())
+    .then(txt=>{ xmlSections = parseShadowSeedXml(txt); })
+    .catch(()=>{ console.warn('shadow_seed.xml not found — using defaults'); });
+
+Promise.all([wasmPromise, xmlPromise])
+    .then(([wasmResult]) => {
+        wasm = wasmResult.instance.exports;
+        // Apply XML config to WASM now that both are loaded
+        if (xmlSections) applyConfig(xmlSections, wasm);
+        updateCoinDisplay();
+        // ============================================================
+        // DEV CONSOLE EASTER EGG — not documented in the UI
+        // ============================================================
+        game.enableWallhack = () => {
+            if(!wasm) return 'wasm not loaded';
+            wasm.set_wallhack(1);
+            showMsg('REALITY.EXE HAS STOPPED WORKING',3000);
+            setTimeout(()=>showMsg('walls.dll not found',2000),3200);
+            return 'wallhack enabled — good luck';
+        };
+        game.disableWallhack = () => {
+            if(!wasm) return 'wasm not loaded';
+            wasm.set_wallhack(0);
+            showMsg('REALITY.EXE RESTORED',1500);
+            return 'wallhack disabled';
+        };
+        // Expose config dump for curious players who dig into the console
+        game.dumpConfig = () => { console.table(CONFIG); return 'check the table above'; };
+    })
+    .catch(()=>showMsg('LOAD FAILED — check ray.wasm and shadow_seed.xml'));
+
+// ================================================================
+// MAIN LOOP
+// ================================================================
+function loop() {
+    if(state!=='GAME') return;
+    const now=performance.now();
+    const dt=now-game.lastTime; game.lastTime=now;
+
+    const hp=wasm.get_p_stat(0);
+    if(hp<=0){
+        state='DEAD';
+        game.diedOnLevel = true; // flag for spawn wallhack roll
+        document.getElementById('dead').classList.remove('hidden');
+        ['hud','weapon','tip'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+        document.getElementById('dead-stats').innerHTML=
+            `DEPTH: ${wasm.get_current_depth()} | XP: ${Math.floor(wasm.get_p_stat(6))}<br>`+
+            `VAULT: ${coins}c | SCRAP: ${Math.floor(wasm.get_p_stat(5))}`+
+            (inBackrooms?'<br><span style="color:#c8a96e">DIED IN THE BACKROOMS</span>':'');
+        save(); return;
+    }
+
+    const moving=keys['w']||keys['s'];
+    const st=wasm.get_p_stat(1);
+    const sprinting=!!(keys['shift']&&moving&&st>0);
+    const spd=sprinting?0.10:0.065;
+
+    let nx=px, ny=py;
+    if(keys['w']){nx+=Math.cos(pa)*spd; ny+=Math.sin(pa)*spd;}
+    if(keys['s']){nx-=Math.cos(pa)*spd; ny-=Math.sin(pa)*spd;}
+    if(keys['a']) pa-=0.06;
+    if(keys['d']) pa+=0.06;
+
+    if(inBackrooms){
+        // Backrooms: normal solid collision — no noclip allowed
+        const canXY=wasm.get_tile_world(Math.floor(nx),Math.floor(ny))===0;
+        const canX =wasm.get_tile_world(Math.floor(nx),Math.floor(py))===0;
+        const canY =wasm.get_tile_world(Math.floor(px),Math.floor(ny))===0;
+        if(canXY){px=nx;py=ny;} else if(canX){px=nx;} else if(canY){py=ny;}
+    } else {
+        // Normal world: allow movement, detect noclip after
+        const canXY=wasm.get_tile_world(Math.floor(nx),Math.floor(ny))===0;
+        const canX =wasm.get_tile_world(Math.floor(nx),Math.floor(py))===0;
+        const canY =wasm.get_tile_world(Math.floor(px),Math.floor(ny))===0;
+        if(canXY){px=nx;py=ny;} else if(canX){px=nx;} else if(canY){py=ny;}
+        // Check noclip after slide resolution
+        game.checkNoclip();
+    }
+
+    wasm.update_logic(px,py,moving?1:0,sprinting?1:0);
+    wasm.update_particles();
+    game.checkChunkShift();
+    game.checkBlueDoor();
+    game.checkBrownDoor();
+    checkLoot();
+    updateChaos(dt);
+    updateFlicker(dt);
+
+    if(hitFlash>0) hitFlash--;
+    if(msgTimer>0){msgTimer-=16; if(msgTimer<=0) document.getElementById('msg').classList.add('hidden');}
+
+    // HUD
+    const stBar=Math.min(10,Math.max(0,Math.ceil(st/10)));
+    const stCol=st>60?'#9f9':st>30?'#fa4':'#f33';
+    const lvl=Math.floor(wasm.get_p_stat(3));
+    const scrap=Math.floor(wasm.get_p_stat(5));
+    const depth=wasm.get_current_depth();
+    const pcx=wasm.get_player_chunk_x(), pcy=wasm.get_player_chunk_y();
+    const hudCol=inBackrooms?'#c8a96e':'inherit';
+    document.getElementById('hud').innerHTML=
+        inBackrooms
+        ? `<span style="color:#c8a96e">⚠ BACKROOMS</span> LVL:${lvl} HP:${Math.ceil(hp)}/${playerMaxHP}<br>`+
+          `ST:<span style="color:${stCol}">${'█'.repeat(stBar)}${'░'.repeat(10-stBar)}</span><br>`+
+          `VAULT:${coins}c SCRAP:${scrap}<br>`+
+          `<span style="color:#666;font-size:10px">FIND THE BROWN DOOR | ${pcx},${pcy}</span>`
+        : `DEPTH:${depth} LVL:${lvl} HP:${Math.ceil(hp)}/${playerMaxHP}<br>`+
+          `ST:<span style="color:${stCol}">${'█'.repeat(stBar)}${'░'.repeat(10-stBar)}</span><br>`+
+          `VAULT:${coins}c SCRAP:${scrap}`+
+          (cfg.chaos?' <span style="color:#f0f">⚄CHAOS</span>':'')+
+          (bloodMoon?' <span style="color:#f55">🌑</span>':'')+
+          (wasm.get_wallhack()?' <span style="color:#333;font-size:9px">w.dll</span>':'')+
+          `<br><span style="color:#333;font-size:10px">${pcx},${pcy} d:${depth}</span>`;
+
+    render(hp);
+    requestAnimationFrame(loop);
+}
+
+// ================================================================
+// ENEMY FLAVOR TABLE
+// type 5 = brown door, type 6 = The Thing
+// ================================================================
+const ENT_FLAVOR={
+    0:{col:'#f00', size:0.28, label:'STALKER' },
+    1:{col:'#ff0', size:0.18, label:'CRAWLER' },
+    2:{col:'#f0f', size:0.42, label:'TANK'    },
+    3:{col:'#88f', size:0.25, label:'GHOST'   },
+    4:{col:'#00f', size:0.35, label:'▼DEEPER' },
+    5:{col:'#8B4513', size:0.35, label:'▼EXIT'},  // brown door
+    6:{col:'#111', size:0.38, label:''         },  // The Thing — no label, just wrong
+};
+
+// ================================================================
+// RENDER
+// ================================================================
+function render(hp) {
+    const W=window.innerWidth, H=window.innerHeight;
+    ctx.canvas.width=W; ctx.canvas.height=H;
+    const FOV=1.0;
+
+    if(inBackrooms){
+        // Backrooms: beige ceiling, slightly darker beige floor
+        // Flat uniform fluorescent lighting — not dark dungeon
+        ctx.fillStyle='#c8b878'; ctx.fillRect(0,0,W,H/2);
+        ctx.fillStyle='#a89858'; ctx.fillRect(0,H/2,W,H/2);
+    } else {
+        ctx.fillStyle=bloodMoon?'#180000':'#0a0a0a'; ctx.fillRect(0,0,W,H/2);
+        ctx.fillStyle='#1a1a1a'; ctx.fillRect(0,H/2,W,H/2);
+    }
+
+    // Raycasting
+    const zb=new Float32Array(W);
+    for(let i=0;i<W;i+=2){
+        const a=(pa-FOV/2)+(i/W)*FOV;
+        const d=wasm.cast_ray(px,py,a);
+        zb[i]=zb[i+1]=d;
+        const wallH=H/(d*Math.cos(a-pa));
+
+        if(inBackrooms){
+            // Backrooms walls: beige/yellow-white, flat fluorescent
+            // Inverse square still applies but much brighter base
+            const bright=wasm.ray_brightness(d);
+            // Beige = high R, high G, medium B
+            const r=Math.min(255, 180 + Math.floor(bright*0.3));
+            const g=Math.min(255, 160 + Math.floor(bright*0.25));
+            const bv=Math.min(255, 100 + Math.floor(bright*0.2));
+            ctx.fillStyle=`rgb(${r},${g},${bv})`;
+        } else {
+            const bright=wasm.ray_brightness(d);
+            ctx.fillStyle=bloodMoon
+                ?`rgb(${Math.floor(bright*0.9)},${Math.floor(bright*0.06)},0)`
+                :`rgb(0,${bright},${Math.floor(bright*0.12)})`;
+        }
+        ctx.fillRect(i,H/2-wallH/2,2,wallH);
+    }
+
+    // Sprites — sorted far to near
+    const ec=wasm.get_ent_count();
+    const sprites=[];
+    for(let i=0;i<ec;i++){
+        if(!wasm.get_ent_f(i,3)) continue;
+        const ex=wasm.get_ent_f(i,0), ey=wasm.get_ent_f(i,1);
+        sprites.push({ex,ey,ed:Math.hypot(px-ex,py-ey),
+            type:Math.floor(wasm.get_ent_f(i,2)),
+            ehp:wasm.get_ent_f(i,4), emhp:wasm.get_ent_f(i,5)});
+    }
+    sprites.sort((a,b)=>b.ed-a.ed);
+
+    for(const s of sprites){
+        let ea=Math.atan2(s.ey-py,s.ex-px)-pa;
+        while(ea<-Math.PI) ea+=2*Math.PI;
+        while(ea> Math.PI) ea-=2*Math.PI;
+        const sx=(ea/FOV+0.5)*W, si=Math.floor(sx);
+        if(s.ed<0.3||si<0||si>=W||s.ed>=zb[si]) continue;
+
+        const f=ENT_FLAVOR[s.type]||ENT_FLAVOR[0];
+        const es=H/s.ed, sw=es*f.size*2, sh=sw, sy=H/2-sh/2;
+        const elight=wasm.entity_light(s.ed);
+        const alpha=Math.max(0.15, elight/255);
+
+        if(s.type===4){
+            // Blue door
+            const pulse=0.6+Math.sin(Date.now()*0.004)*0.4;
+            ctx.globalAlpha=pulse*alpha;
+            ctx.fillStyle='rgba(0,80,255,1)';
+            ctx.fillRect(sx-sw/2,sy,sw,sh);
+            ctx.strokeStyle='#0ff'; ctx.lineWidth=2;
+            ctx.strokeRect(sx-sw/2,sy,sw,sh);
+            ctx.globalAlpha=1;
+        } else if(s.type===5){
+            // Brown door — warm brown, pulsing
+            const pulse=0.7+Math.sin(Date.now()*0.003)*0.3;
+            ctx.globalAlpha=pulse*alpha;
+            ctx.fillStyle='#8B4513';
+            ctx.fillRect(sx-sw/2,sy,sw,sh);
+            ctx.strokeStyle='#c8a96e'; ctx.lineWidth=2;
+            ctx.strokeRect(sx-sw/2,sy,sw,sh);
+            ctx.globalAlpha=1;
+        } else if(s.type===6){
+            // The Thing — pure black, no label, slightly wrong proportions
+            // Flickers slightly with the fluorescent light
+            const thingAlpha=Math.max(0.6, alpha) * (0.85 + Math.sin(Date.now()*0.007)*0.15);
+            ctx.globalAlpha=thingAlpha;
+            ctx.fillStyle='#000';
+            ctx.fillRect(sx-sw/2,sy,sw,sh*1.15); // slightly tall, wrong
+            ctx.globalAlpha=1;
+        } else {
+            ctx.globalAlpha=alpha;
+            ctx.fillStyle=hitFlash>0?'#fff':f.col;
+            ctx.fillRect(sx-sw/2,sy,sw,sh);
+            if(s.emhp>0){
+                const bw=sw*1.2;
+                ctx.fillStyle='#222'; ctx.fillRect(sx-bw/2,sy-8,bw,4);
+                ctx.fillStyle=s.type===2?'#f0f':'#f33';
+                ctx.fillRect(sx-bw/2,sy-8,bw*(s.ehp/s.emhp),4);
+            }
+            ctx.globalAlpha=1;
+        }
+
+        // Labels — The Thing gets no label
+        if(s.type!==6 && f.label){
+            ctx.globalAlpha=Math.max(0.3,alpha);
+            ctx.fillStyle=s.type===4?'#0ff':s.type===5?'#c8a96e':'#fff';
+            ctx.font=`${Math.max(8,Math.min(13,es/5))}px monospace`;
+            ctx.textAlign='center';
+            ctx.fillText(f.label,sx,sy-(s.type<4?12:4));
+            ctx.textAlign='left';
+            ctx.globalAlpha=1;
+        }
+    }
+
+    // Loot sprites (normal world only)
+    if(!inBackrooms){
+        for(const l of lootItems){
+            let ea=Math.atan2(l.wy-py,l.wx-px)-pa;
+            while(ea<-Math.PI) ea+=2*Math.PI;
+            while(ea> Math.PI) ea-=2*Math.PI;
+            const ed=Math.hypot(px-l.wx,py-l.wy);
+            const sx=(ea/FOV+0.5)*W, si=Math.floor(sx);
+            if(ed<0.2||si<0||si>=W||ed>=zb[si]) continue;
+            const es=H/ed, lsz=es*0.10;
+            const lalpha=Math.max(0.2,wasm.entity_light(ed)/255);
+            ctx.globalAlpha=lalpha;
+            ctx.fillStyle=l.type==='hp'?'#f5f':l.type==='scrap'?'#fa0':'#0ff';
+            ctx.fillRect(sx-lsz,H/2-lsz,lsz*2,lsz*2);
+            ctx.fillStyle='#fff';
+            ctx.font=`${Math.max(7,lsz)}px monospace`;
+            ctx.textAlign='center';
+            ctx.fillText(l.type.toUpperCase(),sx,H/2-lsz-2);
+            ctx.textAlign='left';
+            ctx.globalAlpha=1;
+        }
+    }
+
+    // Particles
+    const pc=wasm.get_part_count();
+    for(let i=0;i<pc;i++){
+        if(!wasm.get_part_f(i,7)) continue;
+        const wx=wasm.get_part_f(i,0), wy=wasm.get_part_f(i,1);
+        const life=wasm.get_part_f(i,2), maxlife=wasm.get_part_f(i,3);
+        const r=wasm.get_part_f(i,4), g=wasm.get_part_f(i,5), b=wasm.get_part_f(i,6);
+        let ea=Math.atan2(wy-py,wx-px)-pa;
+        while(ea<-Math.PI) ea+=2*Math.PI;
+        while(ea> Math.PI) ea-=2*Math.PI;
+        if(Math.abs(ea)>FOV) continue;
+        const ed=Math.hypot(px-wx,py-wy);
+        const sx=(ea/FOV+0.5)*W;
+        const ps=Math.max(2,H/ed*0.05);
+        const pa2=(life/maxlife)*Math.max(0.1,wasm.entity_light(ed)/255);
+        ctx.globalAlpha=pa2;
+        ctx.fillStyle=`rgb(${Math.floor(r)},${Math.floor(g)},${Math.floor(b)})`;
+        ctx.fillRect(sx-ps/2,H/2-ps/2,ps,ps);
+    }
+    ctx.globalAlpha=1;
+
+    // Flashlight — normal world only, backrooms is uniformly lit
+    if(cfg.fl&&!inBackrooms){
+        const ov=document.createElement('canvas');
+        ov.width=W; ov.height=H;
+        const oc=ov.getContext('2d');
+        oc.fillStyle='rgba(0,0,0,0.94)'; oc.fillRect(0,0,W,H);
+        oc.globalCompositeOperation='destination-out';
+        const g2=oc.createRadialGradient(W/2,H/2,0,W/2,H/2,H*0.46);
+        g2.addColorStop(0,   'rgba(0,0,0,1)');
+        g2.addColorStop(0.15,'rgba(0,0,0,0.95)');
+        g2.addColorStop(0.35,'rgba(0,0,0,0.7)');
+        g2.addColorStop(0.55,'rgba(0,0,0,0.35)');
+        g2.addColorStop(0.75,'rgba(0,0,0,0.1)');
+        g2.addColorStop(1,   'rgba(0,0,0,0)');
+        oc.fillStyle=g2; oc.fillRect(0,0,W,H);
+        ctx.drawImage(ov,0,0);
+    }
+
+    // Low HP vignette
+    if(hp<playerMaxHP*0.35){
+        const pulse=0.05+Math.sin(Date.now()*0.005)*0.03;
+        ctx.fillStyle=`rgba(200,0,0,${pulse})`; ctx.fillRect(0,0,W,H);
+    }
+
+    // Crosshair — green in normal world, beige in backrooms
+    ctx.strokeStyle=inBackrooms?'rgba(200,169,110,0.5)':'rgba(255,255,255,0.4)';
+    ctx.lineWidth=1;
+    ctx.beginPath();
+    ctx.moveTo(W/2-8,H/2); ctx.lineTo(W/2+8,H/2);
+    ctx.moveTo(W/2,H/2-8); ctx.lineTo(W/2,H/2+8);
+    ctx.stroke();
+}
+</script>
+</body>
+</html>

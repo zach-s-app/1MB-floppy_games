@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    shadow_seed.xml
+    Triple-purpose config file:
+      1. build.sh reads <build> for compile flags
+      2. JS fetches and parses all sections at runtime
+      3. WASM receives values via set_config_* exports
+
+    Plain ini  = readable config (boring stuff)
+    Base64 ini = obfuscated config (sensitive/secret stuff)
+    Type inference: true/false=bool, has dot=float, digits=int, else=string
+-->
+<shadowseed>
+
+    <!-- ============================================================
+         BUILD — shell script reads these at compile time
+         ============================================================ -->
+    <build>
+        rustc_edition=2024
+        rustc_target=wasm32-unknown-unknown
+        rustc_opt=s
+        rustc_crate_type=staticlib
+        clang_target=wasm32
+        clang_opt=2
+        output=ray.wasm
+    </build>
+
+    <!-- ============================================================
+         WORLD — chunk and map generation constants
+         ============================================================ -->
+    <world>
+        chunk_w=10
+        chunk_h=10
+        grid_size=9
+        wall_density=5
+        max_draw_dist=20
+        max_entities=64
+        max_particles=128
+    </world>
+
+    <!-- ============================================================
+         PLAYER — base stats and movement
+         ============================================================ -->
+    <player>
+        base_hp=100
+        base_stamina=100
+        move_speed=0.065
+        sprint_speed=0.10
+        walk_drain=0.10
+        sprint_drain=0.35
+        stamina_regen=0.30
+        stamina_regen_per_upgrade=0.08
+    </player>
+
+    <!-- ============================================================
+         ENEMIES — per-type tuning
+         ============================================================ -->
+    <enemies>
+        stalker_range=7.0
+        stalker_accel=0.0012
+        stalker_drag=0.90
+        stalker_damage=0.11
+        stalker_hit_radius=0.38
+        crawler_range=9.0
+        crawler_accel=0.003
+        crawler_drag=0.85
+        crawler_damage=0.07
+        crawler_hit_radius=0.38
+        tank_range=5.0
+        tank_accel=0.0006
+        tank_drag=0.95
+        tank_damage=0.20
+        tank_hit_radius=0.55
+        tank_scrap=3
+        ghost_range=8.0
+        ghost_accel=0.0015
+        ghost_drag=0.88
+        ghost_damage=0.11
+        ghost_hit_radius=0.38
+        ghost_phase_denom=5
+        weapon_damage=20.0
+        weapon_range=6.0
+        weapon_angle=0.35
+    </enemies>
+
+    <!-- ============================================================
+         LOOT — drop rates and heal values
+         ============================================================ -->
+    <loot>
+        base_count=2
+        depth_bonus=3
+        hp_heal=15.0
+        scrap_pickup=3
+        scrap_to_coins=5
+        blood_moon_kill_coins=10
+        normal_kill_coins=5
+    </loot>
+
+    <!-- ============================================================
+         CHAOS — chaos mode timing
+         ============================================================ -->
+    <chaos>
+        interval=4000
+        interval_variance=2000
+    </chaos>
+
+    <!-- ============================================================
+         SECRETS — obfuscated, base64 encoded ini
+         These control the wallhack easter egg.
+         Decode with: base64 -d <<< "<line>"
+         ============================================================ -->
+    <secrets>
+        d2FsbGhhY2tfY2hhbmNlPTEwMDA=
+        d2FsbGhhY2tfZW5hYmxlZD1mYWxzZQ==
+    </secrets>
+
+    <!-- ============================================================
+         BACKROOMS — obfuscated, base64 encoded ini
+         Decode to see the real values. Some things are better left unknown.
+         ============================================================ -->
+    <backrooms>
+        YmFja3Jvb21zX3dhbGxfZGVuc2l0eT0xMg==
+        dGhpbmdfaHBfYmFzZT04MA==
+        dGhpbmdfaHBfcGVyX2RlcHRoPTEy
+        dGhpbmdfZGFtYWdlPTAuMzU=
+        dGhpbmdfeHA9MTUw
+        dGhpbmdfc2NyYXA9NQ==
+        ZmxpY2tlcl9taW49ODAw
+        ZmxpY2tlcl9tYXg9NDAwMA==
+        bm9fbG9vdD10cnVl
+        ZW50ZXJfbXNnPVlPVSBIQVZFIENMSVBQRUQgT1VUIE9GIFJFQUxJVFk=
+        ZmluZF9tc2c9RklORCBUSEUgQlJPV04gRE9PUg==
+        ZXNjYXBlZF9tc2c9RVNDQVBFRCBUSEUgQkFDS1JPT01T
+    </backrooms>
+
+</shadowseed>
